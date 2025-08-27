@@ -1,0 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Jersey+10&family=Pixelify+Sans:wght@400..700&display=swap');
+
+:root {
+    --font-main: "Pixelify Sans", sans-serif;
+    --font-terc: "Jersey 10", sans-serif;
+    --font-sec: system-ui, Avenir, Helvetica, Arial, sans-serif;
+
+    --c1: #1e1e1e;
+    --c2: #3c3d3f;
+    --c3: #292929;
+    --c4: rgb(166, 166, 166);
+    --red: rgb(206, 94, 94);
+    --green: rgb(76, 175, 76);
+    --text: #abb2bf;
+}  
