@@ -14,6 +14,8 @@ export default function Board(props) {
     setSelectedLetter,
   } = props;
 
+  const [scope, animate] = useAnimate();
+  const isAnimating = useRef(false);
   const [words, setWords] = useState(
     Array.from({ length: rows }).map((_, i) => ({
       type: i == 0 ? "activeRow" : "default",
@@ -21,12 +23,10 @@ export default function Board(props) {
     }))
   );
 
-  const lastTyped = useRef(null);
   const wordSize = rightWord.length;
 
   const handleKeyPress = (event) => {
-    if (rowActive < 0) return;
-    lastTyped.current = event.key;
+    if (rowActive < 0 || isAnimating.current) return;
 
     if (
       event.key.length === 1 &&
@@ -56,6 +56,8 @@ export default function Board(props) {
       newWords[rowActive] = newRow;
 
       setWords(newWords);
+
+      animateBumpCell(selectedLetter);
     } else if (event.key === "ArrowRight") {
       setSelectedLetter((prev) => (prev < rightWord.length - 1 ? prev + 1 : 0));
     } else if (event.key === "ArrowLeft") {
@@ -79,28 +81,53 @@ export default function Board(props) {
     } else if (event.key === "Enter") {
       const currentWord = words[rowActive].word.join("");
       if (!currentWord) {
-        console.log("No word");
-        shake(rowActive);
+        animateShake(rowActive);
       } else if (currentWord.length < wordSize) {
-        shake(rowActive);
-        console.log("Word too short");
+        animateShake(rowActive);
       } else {
+        const currentWord = [...words[rowActive].word];
+
+        const wordLetter = {};
+        for (let i in rightWord) {
+          const l = rightWord[i];
+          if (!wordLetter[l]) {
+            wordLetter[l] = {
+              count: 1,
+            };
+          } else {
+            wordLetter[l].count++;
+          }
+        }
+
+        const status = currentWord.map((l, i) => {
+          if (l === rightWord[i]) {
+            wordLetter[l].count--;
+            return "correct";
+          }
+          if (rightWord.includes(l) && wordLetter[l].count > 0) {
+            wordLetter[l].count--;
+            return "present";
+          }
+          return "absent";
+        });
+
         setWords((prevWords) =>
           prevWords.map((row, rowIndex) => {
             if (rowIndex === rowActive) {
-              return { ...row, revealed: true };
+              return { ...row, isRevealed: true, status };
             }
             return row;
           })
         );
-        turn(rowActive);
-        // setRowActive((prev) => (prev < rows - 1 ? prev + 1 : -1));
+        setSelectedLetter(wordSize);
       }
     }
   };
 
   const handleCellPointerDown = (event) => {
-    const letterEl = event.target.closest(".letter");
+    const letterEl = event.target.closest(".row.active .letter");
+    if (!letterEl) return;
+
     const value = parseInt(letterEl?.dataset.letter);
     setSelectedLetter(!isNaN(value) ? value : wordSize);
   };
@@ -116,24 +143,12 @@ export default function Board(props) {
   }, [words, selectedLetter]);
 
   useEffect(() => {
-    const select = () => {
-      if (selectedLetter < wordSize) {
-        animate(
-          `#row-${rowActive} .letter[data-letter="${selectedLetter}"] .front`,
-          { borderBottomWidth: "8px" },
-          { duration: 0.2 }
-        );
-      }
-      animate(
-        `#row-${rowActive} .letter:not([data-letter="${selectedLetter}"]) .front`,
-        { borderBottomWidth: "4px" },
-        { duration: 0.2 }
-      );
-    };
-    select();
-  }, [selectedLetter]);
+    if (words[rowActive].isRevealed && !isAnimating.current) {
+      animateTurn(rowActive);
+    }
+  }, [words]);
 
-  async function shake(id) {
+  async function animateShake(id) {
     await animate(
       `#row-${id}`,
       { x: [0, -10, 10, -10, 10, 0] },
@@ -141,8 +156,17 @@ export default function Board(props) {
     );
   }
 
-  async function turn(row, index) {
+  async function animateBumpCell(index) {
+    await animate(
+      `#row-${rowActive} .letter[data-letter="${index}"]`,
+      { scale: [1, 1.1, 1] },
+      { duration: 0.2, ease: "easeOut" }
+    );
+  }
+
+  async function animateTurn(row) {
     const actualRow = words[row];
+    isAnimating.current = true;
 
     const promises = actualRow.word.map((_, l) => {
       return new Promise((resolve) => {
@@ -160,23 +184,50 @@ export default function Board(props) {
     // espera todos terminarem
     await Promise.all(promises);
 
-    const nextRowActive = (row < rows - 1 ? row + 1 : rows-1);
+    const nextRowActive = row < rows - 1 ? row + 1 : rows - 1;
+    isAnimating.current = false;
 
-    setRowActive(nextRowActive);
-    setSelectedLetter(0);
-    setWords((prevWords) =>
-      prevWords.map((row, rowIndex) => {
-        if (rowIndex === nextRowActive) {
-          return { ...row, type: "activeRow" };
-        } else if (rowIndex === actualRow) {
-          return { ...row, type: "turned" };
-        }
-        return row;
-      })
-    );
+    console.log(actualRow);
+    if (actualRow.status.every((s) => s === "correct")) {
+      // Se a palavra foi adivinhada corretamente, faz algo
+      console.log("Parabéns! Você adivinhou a palavra!");
+      animateWin(rowActive);
+    } else {
+      setSelectedLetter(0);
+      setWords((prevWords) =>
+        prevWords.map((r, rowIndex) => {
+          if (rowIndex === nextRowActive) {
+            return { ...r, type: "activeRow" };
+          }
+          return r;
+        })
+      );
+      setRowActive(nextRowActive);
+    }
   }
 
-  const [scope, animate] = useAnimate();
+  async function animateWin(row) {
+    const actualRow = words[row];
+    isAnimating.current = true;
+
+    const promises = actualRow.word.map((_, l) => {
+      return new Promise((resolve) => {
+        setTimeout(async () => {
+          await animate(
+            `#row-${row} .letter[data-letter="${l}"]`,
+            { y: [0, -20, 0] },
+            { duration: 0.5, ease: "easeInOut" }
+          );
+          resolve();
+        }, l * 100);
+      });
+    });
+
+    // espera todos terminarem
+    await Promise.all(promises);
+
+    isAnimating.current = false;
+  }
 
   return (
     <div
@@ -188,7 +239,7 @@ export default function Board(props) {
         <div
           key={i}
           id={`row-${i}`}
-          className="grid gap-2 row"
+          className={`grid gap-2 row ${i == rowActive ? "active" : ""}`}
           style={{ gridTemplateColumns: `repeat(${wordSize}, minmax(0, 1fr))` }}
         >
           {w.word.map((letter, j) => (
@@ -198,7 +249,7 @@ export default function Board(props) {
               letter={letter}
               active={rowActive == i && j === selectedLetter}
               type={w.type}
-              revealed={w.revealed}
+              status={w.status && w.status[j]}
             />
           ))}
         </div>
@@ -207,11 +258,18 @@ export default function Board(props) {
   );
 }
 
-const Cell = memo(({ letter, type, index }) => {
-  const classes = clsx(
-    "front",
-    type == "default" && "bg-(--c3)",
-    type == "activeRow" && "border-4 border-(--c2) cursor-pointer"
+const Cell = memo(({ letter, index, type, status, active }) => {
+  const clxFront = clsx(
+    "front transition-[background] ease-in duration-500",
+    type == "default" && "bg-(--c3) border-(--c3)",
+    type == "activeRow" && "bg-[#00000000] border-(--c2) cursor-pointer"
+  );
+
+  const clxBack = clsx(
+    "back rotate-y-180",
+    status == "correct" && "bg-(--cRight)",
+    status == "present" && "bg-(--cPlace)",
+    status == "absent" && "bg-(--cWrong)"
   );
 
   return (
@@ -221,16 +279,20 @@ const Cell = memo(({ letter, type, index }) => {
         data-letter={index}
       >
         <motion.div className="flip transform-3d rotate-y-0 w-full h-full">
-          <motion.div className={classes}>
+          <motion.div
+            className={clxFront}
+            initial={{ borderWidth: 0 }}
+            animate={{ borderWidth: type == "activeRow" ? 4 : 0 , borderBottomWidth: active ? 8 : 4 }}
+          >
             {letter && (
               <motion.span
                 initial={{
                   opacity: 0,
-                  y: -20,
+                  // y: -20,
                 }}
                 animate={{
                   opacity: 1,
-                  y: 0,
+                  // y: 0,
                 }}
                 transition={{ duration: 0.2 }}
               >
@@ -238,9 +300,7 @@ const Cell = memo(({ letter, type, index }) => {
               </motion.span>
             )}
           </motion.div>
-          {type !== "default" && (
-            <div className="back rotate-y-180">{letter}</div>
-          )}
+          {type !== "default" && <div className={clxBack}>{letter}</div>}
         </motion.div>
       </div>
     </>
