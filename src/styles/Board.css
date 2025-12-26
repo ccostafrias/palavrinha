@@ -1,5 +1,0 @@
-@import "tailwindcss";
-
-.front, .back {
-  @apply backface-hidden flex items-center justify-center text-2xl font-bold capitalize text-center absolute top-0 left-0 w-full h-full p-2 rounded
-}

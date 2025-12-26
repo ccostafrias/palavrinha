@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Jersey+10&family=Pixelify+Sans:wght@400..700&display=swap');
+@import "tailwindcss";
+
+@theme {
+    --color-bg: var(--color-bg);
+    --color-surface-0: hsl(var(--color-surface-0));
+    --color-surface-1: hsl(var(--color-surface-1));
+    --color-surface-2: hsl(var(--color-surface-2));
+    --color-muted: hsl(var(--color-muted));
+    --color-text: hsl(var(--color-text));
+    --color-accent-correct: hsl(var(--color-accent-correct));
+    --color-accent-present: hsl(var(--color-accent-present));
+    --color-absent-bg: hsl(var(--color-absent-bg));
+    --color-absent-fg: hsl(var(--color-absent-fg));
+}
+
+:root {
+    /* Fontes */
+    --font-main: "Pixelify Sans", sans-serif;
+    --font-terc: "Jersey 10", sans-serif;
+    --font-sec: system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+/* Tema claro */
+html {
+    /* Componentes HSL (valores do tema claro) */
+    --color-bg: #ffffff;            /* branco */
+    --color-surface-0: #fafafa;      /* quase branco */
+    --color-surface-1: #e6e6e6;      /* cinza claro */
+    --color-surface-2: #ebebeb;      /* cinza bem claro */
+    --color-muted: #666666;          /* texto secundário */
+    --color-text: #1a1a1a;           /* quase preto */
+    /* Acentos */
+    --color-accent-correct: #3aa394; /* verde correto */
+    --color-accent-present: #d3ad69;  /* amarelo presente */
+    --color-absent-bg: #9c9c9c;       /* cinza médio ausente */
+    --color-absent-fg: #504a4b;         /* texto sobre ausente */
+}
+
+/* Tema escuro */
+html.dark {
+    /* Conversões HSL dos hex originais */
+    --color-bg: #1e1e1e;
+    --color-surface-0: #111111;
+    --color-surface-1: #3c3d3f;
+    --color-surface-2: #292929;
+    --color-muted: #a6a6a6;
+    --color-text: #FAFAFF;
+
+    /* Acentos */
+    --color-accent-correct: #3aa394;
+    --color-accent-present: #d3ad69;
+    --color-absent-bg: #111111;
+    --color-absent-fg: #504a4b;
+}
+
+/*Reset & root*/
+html {
+    font-weight: normal;
+    box-sizing: border-box;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+input, button {
+    appearance: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+body, button, input, textarea, a {
+    color: var(--color-text);
+    font-family: var(--font-main);
+}
+
+#root {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    width: 100%;
+    min-height: 100vh;
+}
+
+html, body {
+    /* overflow: hidden; */
+    background-color: var(--color-bg);
+    font-size: 1.2rem;
+    line-height: 1;
+}

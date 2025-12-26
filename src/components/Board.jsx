@@ -1,152 +1,163 @@
-import React, { memo, useEffect, useState, useRef } from "react";
+import React, { memo, useEffect, useState, useRef, useLayoutEffect } from "react";
 import { motion, useAnimate } from "framer-motion";
+import { areArraysEqual } from "../utils/compareArrays";
 import clsx from "clsx";
-
-import "../styles/Board.css";
 
 export default function Board(props) {
   const {
+    boardId,
     rightWord,
-    rows = 6,
+    rows,
     rowActive = 0,
-    setRowActive,
     selectedLetter = 0,
-    setSelectedLetter,
+    actualRow,
+    lastEffect,
+    setLastEffect,
+    getBoardById,
+    getIsWinnerById,
+    saveBoardById
   } = props;
+
+  const [words, setWords] = useState(getBoardById(boardId));
+  const [isFinished, setIsFinished] = useState(getIsWinnerById(boardId));
 
   const [scope, animate] = useAnimate();
   const isAnimating = useRef(false);
-  const [words, setWords] = useState(
-    Array.from({ length: rows }).map((_, i) => ({
-      type: i == 0 ? "activeRow" : "default",
-      word: Array.from({ length: rightWord.length }).map(() => ""),
-    }))
-  );
 
   const wordSize = rightWord.length;
 
-  const handleKeyPress = (event) => {
-    if (rowActive < 0 || isAnimating.current) return;
+  function onSubmitRow() {
+    const currentWord = words[rowActive].word.join("");
 
-    if (
-      event.key.length === 1 &&
-      /^[a-zA-Z]$/.test(event.key) &&
-      selectedLetter < wordSize
-    ) {
-      const newWords = [...words];
-      const newRow = { ...newWords[rowActive] };
-      const newWord = [...newRow.word];
-
-      newWord[selectedLetter] = event.key;
-      const isWordFull = newWord.every((l) => l !== "");
-      if (isWordFull) {
-        setSelectedLetter(wordSize);
-      } else {
-        let i = selectedLetter;
-        while (true) {
-          if (newWord[i] === "") {
-            setSelectedLetter(i);
-            break;
-          }
-          i = (i + 1) % wordSize;
-        }
-      }
-
-      newRow.word = newWord;
-      newWords[rowActive] = newRow;
-
-      setWords(newWords);
-
-      animateBumpCell(selectedLetter);
-    } else if (event.key === "ArrowRight") {
-      setSelectedLetter((prev) => (prev < rightWord.length - 1 ? prev + 1 : 0));
-    } else if (event.key === "ArrowLeft") {
-      setSelectedLetter((prev) => (prev > 0 ? prev - 1 : rightWord.length - 1));
-    } else if (event.key === "Backspace") {
-      const newWords = [...words];
-      const newRow = { ...newWords[rowActive] };
-      const newWord = [...newRow.word];
-
-      if (selectedLetter < wordSize && newWord[selectedLetter] !== "") {
-        newWord[selectedLetter] = "";
-      } else {
-        newWord[selectedLetter - 1] = "";
-        setSelectedLetter((prev) => Math.max(prev - 1, 0));
-      }
-
-      newRow.word = newWord;
-      newWords[rowActive] = newRow;
-
-      setWords(newWords);
-    } else if (event.key === "Enter") {
-      const currentWord = words[rowActive].word.join("");
-      if (!currentWord) {
-        animateShake(rowActive);
-      } else if (currentWord.length < wordSize) {
-        animateShake(rowActive);
-      } else {
-        const currentWord = [...words[rowActive].word];
-
-        const wordLetter = {};
-        for (let i in rightWord) {
-          const l = rightWord[i];
-          if (!wordLetter[l]) {
-            wordLetter[l] = {
-              count: 1,
-            };
-          } else {
-            wordLetter[l].count++;
-          }
-        }
-
-        const status = currentWord.map((l, i) => {
-          if (l === rightWord[i]) {
-            wordLetter[l].count--;
-            return "correct";
-          }
-          if (rightWord.includes(l) && wordLetter[l].count > 0) {
-            wordLetter[l].count--;
-            return "present";
-          }
-          return "absent";
-        });
-
-        setWords((prevWords) =>
-          prevWords.map((row, rowIndex) => {
-            if (rowIndex === rowActive) {
-              return { ...row, isRevealed: true, status };
-            }
-            return row;
-          })
-        );
-        setSelectedLetter(wordSize);
-      }
+    // se a palavra atual está vazia
+    if (!currentWord || currentWord.length < wordSize) {
+      animateShake(rowActive);
+      return
     }
-  };
 
-  const handleCellPointerDown = (event) => {
-    const letterEl = event.target.closest(".row.active .letter");
-    if (!letterEl) return;
+    // Normaliza para evitar problemas de comparação por caixa
+    const target = rightWord.toLowerCase();
+    const currentWordArr = words[rowActive].word.map((ch) => ch.toLowerCase());
 
-    const value = parseInt(letterEl?.dataset.letter);
-    setSelectedLetter(!isNaN(value) ? value : wordSize);
-  };
+    // Contagem de letras da palavra alvo
+    const letterCounts = target.split("").reduce((obj, key) => {
+      obj[key] = (obj[key] || 0) + 1;
+      return obj;
+    }, {});
+
+    const status = Array(wordSize).fill("absent");
+
+    status.map((_, i) => {
+      if (currentWordArr[i] === target[i]) {
+        status[i] = "correct";
+        letterCounts[currentWordArr[i]]--;
+      }
+    })
+
+    status.map((_, i) => {
+      if (status[i] === "correct") return;
+
+      if (target.includes(currentWordArr[i]) && letterCounts[currentWordArr[i]] > 0) {
+        status[i] = "present";
+        letterCounts[currentWordArr[i]]--;
+      }
+    })
+
+    setWords((prevWords) => {
+      const newWords = [...prevWords];
+      newWords[rowActive] = {
+        ...newWords[rowActive],
+        isRevealed: true,
+        status,
+      };
+      return newWords;
+    })
+  }
+
+  useLayoutEffect(() => {
+    if (isAnimating.current || isFinished) return;
+
+    if (rowActive >= rows) {
+      setIsFinished(true);
+      setLastEffect({ type: 'game-over', result: 'lose', boardId, boardData: words });
+    }
+  }, [rowActive])
+
+  useLayoutEffect(() => {
+    if (isAnimating.current) return;
+    if (isFinished) return;
+
+    const row = rowActive;
+    const r = words[row];
+    if (!r || !r.isRevealed || r.type !== "activeRow") return;
+
+    let cancelled = false;
+
+    (async () => {
+      await animateTurn(row);
+      if (cancelled) return;
+      
+      const nextRowActive = row < rows - 1 ? row + 1 : rows;
+      const didWin = r.status?.every((s) => s === "correct");
+
+      if (didWin) {
+        await animateWin(row);
+
+        const newWords = [...words];
+        newWords[row] = { ...newWords[row], type: "showed" };
+
+        setIsFinished(true);
+        saveBoardById(boardId, newWords, true, nextRowActive);
+        setLastEffect({ type: 'game-over', result: 'win', boardId, boardData: newWords });
+        
+        return;
+      } else {
+        const newWords = [...words];
+        newWords[row] = { ...newWords[row], type: "showed" };
+        if (nextRowActive < rows) newWords[nextRowActive] = { ...newWords[nextRowActive], type: "activeRow" };
+
+        saveBoardById(boardId, newWords, false, nextRowActive);
+        setLastEffect(prev => ({...prev, result: 'success', boardId, boardData: newWords }) );
+        setWords(newWords);
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [words, rowActive])
 
   useEffect(() => {
-    const handleKeyUp = (event) => {
-      handleKeyPress(event);
-    };
+    if (isAnimating.current || rowActive >= rows) return;
+    if (isFinished) return;
+    if (areArraysEqual(words[rowActive].word, actualRow)) return;
 
-    window.addEventListener("keyup", handleKeyUp);
+    setWords((prevWords) => {
+      const newWords = [...prevWords];
+      newWords[rowActive] = {
+        ...newWords[rowActive],
+        word: actualRow,
+      };
 
-    return () => window.removeEventListener("keyup", handleKeyUp);
-  }, [words, selectedLetter]);
+      return newWords
+    })
+  }, [actualRow]);
 
   useEffect(() => {
-    if (words[rowActive].isRevealed && !isAnimating.current) {
-      animateTurn(rowActive);
+    if (!lastEffect || isAnimating.current ) return;
+    if (isFinished) return;
+
+    if (lastEffect.type === 'bump-cell' && lastEffect.rowIndex === rowActive) {
+      animateBumpCell(lastEffect.cellIndex);
+      return;
     }
-  }, [words]);
+    if (lastEffect.type === 'shake-row' && lastEffect.rowIndex === rowActive) {
+      animateShake(rowActive);
+      return;
+    }
+
+    if (lastEffect.type === 'submit-row' && lastEffect.rowIndex === rowActive) {
+      onSubmitRow();
+    }
+  }, [lastEffect, rowActive]);
 
   async function animateShake(id) {
     await animate(
@@ -183,27 +194,7 @@ export default function Board(props) {
 
     // espera todos terminarem
     await Promise.all(promises);
-
-    const nextRowActive = row < rows - 1 ? row + 1 : rows - 1;
     isAnimating.current = false;
-
-    console.log(actualRow);
-    if (actualRow.status.every((s) => s === "correct")) {
-      // Se a palavra foi adivinhada corretamente, faz algo
-      console.log("Parabéns! Você adivinhou a palavra!");
-      animateWin(rowActive);
-    } else {
-      setSelectedLetter(0);
-      setWords((prevWords) =>
-        prevWords.map((r, rowIndex) => {
-          if (rowIndex === nextRowActive) {
-            return { ...r, type: "activeRow" };
-          }
-          return r;
-        })
-      );
-      setRowActive(nextRowActive);
-    }
   }
 
   async function animateWin(row) {
@@ -232,15 +223,16 @@ export default function Board(props) {
   return (
     <div
       className="board flex flex-col gap-2 w-9/10 max-w-[350px]"
-      onPointerDown={handleCellPointerDown}
       ref={scope}
+      aria-disabled={isFinished}
+      data-finished={isFinished ? 'true' : 'false'}
     >
       {words.map((w, i) => (
         <div
           key={i}
           id={`row-${i}`}
           className={`grid gap-2 row ${i == rowActive ? "active" : ""}`}
-          style={{ gridTemplateColumns: `repeat(${wordSize}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: `repeat(${wordSize}, auto)` }}
         >
           {w.word.map((letter, j) => (
             <Cell
@@ -248,6 +240,7 @@ export default function Board(props) {
               index={j}
               letter={letter}
               active={rowActive == i && j === selectedLetter}
+              isRevealed={w.isRevealed}
               type={w.type}
               status={w.status && w.status[j]}
             />
@@ -258,18 +251,28 @@ export default function Board(props) {
   );
 }
 
-const Cell = memo(({ letter, index, type, status, active }) => {
+const Cell = memo(({ letter, index, type, status, active, isRevealed }) => {
+  const defaultStyle = "backface-hidden flex items-center justify-center text-2xl font-bold capitalize text-center absolute top-0 left-0 w-full h-full p-2 rounded"
+
+  const clxFlip = clsx(
+    "flip transform-3d rotate-y-0 w-full h-full",
+    type === "showed" && "rotate-y-180",
+    // (type === "activeRow" && isRevealed) && "rotate-y-180", 
+  );
+
   const clxFront = clsx(
     "front transition-[background] ease-in duration-500",
-    type == "default" && "bg-(--c3) border-(--c3)",
-    type == "activeRow" && "bg-[#00000000] border-(--c2) cursor-pointer"
+    defaultStyle,
+    type == "default" && "bg-surface-2 border-surface-2",
+    type == "activeRow" && "border-surface-1 cursor-pointer"
   );
 
   const clxBack = clsx(
     "back rotate-y-180",
-    status == "correct" && "bg-(--cRight)",
-    status == "present" && "bg-(--cPlace)",
-    status == "absent" && "bg-(--cWrong)"
+    defaultStyle,
+    status == "correct" && "bg-accent-correct",
+    status == "present" && "bg-accent-present",
+    status == "absent" && "bg-absent-bg"
   );
 
   return (
@@ -278,7 +281,9 @@ const Cell = memo(({ letter, index, type, status, active }) => {
         className="letter transform-3d perspective-near aspect-square"
         data-letter={index}
       >
-        <motion.div className="flip transform-3d rotate-y-0 w-full h-full">
+        <motion.div 
+          className={clxFlip}
+        >
           <motion.div
             className={clxFront}
             initial={{ borderWidth: 0 }}
