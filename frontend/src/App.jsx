@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { RouterProvider, Route, createHashRouter, createRoutesFromElements, Outlet } from 'react-router-dom'
-import Board from "./components/Board";
 import Header from "./components/Header";
 import Solo from "./pages/Solo"
 import Dupla from "./pages/Dupla";
